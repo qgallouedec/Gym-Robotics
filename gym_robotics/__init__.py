@@ -377,6 +377,12 @@ def register_robotics_envs():
             max_episode_steps=100,
         )
 
+    register(
+        id=f"FetchNoTask-v1",
+        entry_point="gym_robotics.envs:FetchNoTaskEnv",
+        max_episode_steps=50,
+    )
+
 
 from . import _version
 
