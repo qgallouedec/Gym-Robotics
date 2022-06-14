@@ -54,7 +54,7 @@ class _Renderer:
 
     def _viewer_setup(self) -> None:
         self.viewer.cam.lookat[:] = np.array([1.37, 0.73, 0.55])
-        self.viewer.cam.distance = 2.5
+        self.viewer.cam.distance = 1.0
         self.viewer.cam.azimuth = 132.0
         self.viewer.cam.elevation = -14.0
 
@@ -69,7 +69,7 @@ class FetchNoTaskEnv(gym.Env, gym.utils.EzPickle):
     Fetch environment.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, image_obs_space: bool = False) -> None:
         initial_qpos = {
             "robot0:slide0": 0.405,
             "robot0:slide1": 0.48,
@@ -104,7 +104,11 @@ class FetchNoTaskEnv(gym.Env, gym.utils.EzPickle):
         self._env_setup(initial_qpos=initial_qpos)
         self.initial_state = copy.deepcopy(self.sim.get_state())
         self.action_space = spaces.Box(-1.0, 1.0, shape=(4,), dtype="float32")
-        self.observation_space = spaces.Box(-np.inf, np.inf, shape=(20,), dtype="float32")
+        self.image_obs_space = image_obs_space
+        if image_obs_space:
+            self.observation_space = spaces.MultiDiscrete((84, 84, 3), dtype="uint8")
+        else:
+            self.observation_space = spaces.Box(-np.inf, np.inf, shape=(20,), dtype="float32")
         gym.utils.EzPickle.__init__(self)
 
     @property
@@ -162,16 +166,19 @@ class FetchNoTaskEnv(gym.Env, gym.utils.EzPickle):
         utils.mocap_set_action(self.sim, action)
 
     def _get_obs(self) -> np.ndarray:
-        # Robot
-        gripper_pos = self.sim.data.get_site_xpos("robot0:grip")
-        gripper_vel = self.sim.data.get_site_xvelp("robot0:grip") * self.dt
-        _robot_pos, _ = utils.robot_get_obs(self.sim)
-        gripper_width = _robot_pos[-2:]
-        # Object
-        object_pos = self.sim.data.get_site_xpos("object0")
-        object_rot = rotations.mat2euler(self.sim.data.get_site_xmat("object0"))
-        object_velp = self.sim.data.get_site_xvelp("object0") * self.dt
-        object_velr = self.sim.data.get_site_xvelr("object0") * self.dt
+        if self.image_obs_space:
+            obs = self.renderer.render("rgb_array", width=84, height=84)
+        else:
+            # Robot
+            gripper_pos = self.sim.data.get_site_xpos("robot0:grip")
+            gripper_vel = self.sim.data.get_site_xvelp("robot0:grip") * self.dt
+            _robot_pos, _ = utils.robot_get_obs(self.sim)
+            gripper_width = _robot_pos[-2:]
+            # Object
+            object_pos = self.sim.data.get_site_xpos("object0")
+            object_rot = rotations.mat2euler(self.sim.data.get_site_xmat("object0"))
+            object_velp = self.sim.data.get_site_xvelp("object0") * self.dt
+            object_velr = self.sim.data.get_site_xvelr("object0") * self.dt
 
-        obs = np.concatenate([gripper_pos, gripper_width, gripper_vel, object_pos, object_rot, object_velp, object_velr])
+            obs = np.concatenate([gripper_pos, gripper_width, gripper_vel, object_pos, object_rot, object_velp, object_velr], dtype=np.float32)
         return obs.copy()
