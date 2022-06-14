@@ -106,7 +106,7 @@ class FetchNoTaskEnv(gym.Env, gym.utils.EzPickle):
         self.action_space = spaces.Box(-1.0, 1.0, shape=(4,), dtype="float32")
         self.image_obs_space = image_obs_space
         if image_obs_space:
-            self.observation_space = spaces.MultiDiscrete((84, 84, 3), dtype="uint8")
+            self.observation_space = spaces.Box(0, 255, (84, 84, 3), dtype="uint8")
         else:
             self.observation_space = spaces.Box(-np.inf, np.inf, shape=(20,), dtype="float32")
         gym.utils.EzPickle.__init__(self)
