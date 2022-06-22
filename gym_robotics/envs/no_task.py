@@ -7,7 +7,7 @@ import gym.utils
 import numpy as np
 from gym import error, spaces
 from gym_robotics.envs import rotations, utils
-
+from gym.utils import seeding
 
 try:
     import mujoco_py
@@ -29,39 +29,32 @@ class _Renderer:
     def __init__(self, sim: mujoco_py.MjSim) -> None:
         self.sim = sim
         self._viewers = {}
-        self.viewer = None  # pytype: mujoco_py.MjViewer
 
     def render(self, mode: str = "human", width: int = DEFAULT_SIZE, height: int = DEFAULT_SIZE) -> Optional[np.ndarray]:
+        viewer = self._get_viewer(mode, width, height)
         if mode == "rgb_array":
-            self._get_viewer(mode).render(width, height)
+            viewer.render(width, height)
             # window size used for old mujoco-py:
-            data = self._get_viewer(mode).read_pixels(width, height, depth=False)
+            img = viewer.read_pixels(width, height, depth=False)
             # original image is upside-down, so flip it
-            return data[::-1, :, :]
+            return img[::-1, :, :]
         elif mode == "human":
-            self._get_viewer(mode).render()
+            viewer.render()
 
-    def _get_viewer(self, mode: str) -> mujoco_py.MjViewer:
-        self.viewer = self._viewers.get(mode)
-        if self.viewer is None:
+    def _get_viewer(self, mode: str = "human", width: int = DEFAULT_SIZE, height: int = DEFAULT_SIZE) -> mujoco_py.MjViewer:
+        viewer_name = "_".join((mode, str(width), str(height)))
+        viewer = self._viewers.get(viewer_name)
+        if viewer is None:
             if mode == "human":
-                self.viewer = mujoco_py.MjViewer(self.sim)
+                viewer = mujoco_py.MjViewer(self.sim)
             elif mode == "rgb_array":
-                self.viewer = mujoco_py.MjRenderContextOffscreen(self.sim, device_id=-1)
-            self._viewer_setup()
-            self._viewers[mode] = self.viewer
-        return self.viewer
-
-    def _viewer_setup(self) -> None:
-        self.viewer.cam.lookat[:] = np.array([1.37, 0.73, 0.55])
-        self.viewer.cam.distance = 1.0
-        self.viewer.cam.azimuth = 132.0
-        self.viewer.cam.elevation = -14.0
-
-    def close(self) -> None:
-        if self.viewer is not None:
-            self.viewer = None
-            self._viewers = {}
+                viewer = mujoco_py.MjRenderContextOffscreen(self.sim, device_id=-1)
+            viewer.cam.lookat[:] = np.array([1.37, 0.73, 0.55])
+            viewer.cam.distance = 1.0
+            viewer.cam.azimuth = 132.0
+            viewer.cam.elevation = -14.0
+            self._viewers[viewer_name] = viewer
+        return viewer
 
 
 class FetchNoTaskEnv(gym.Env, gym.utils.EzPickle):
@@ -132,8 +125,8 @@ class FetchNoTaskEnv(gym.Env, gym.utils.EzPickle):
         return obs, reward, done, info
 
     def reset(self, seed: Optional[int] = None):
-        self.np_random, seed = gym.utils.seeding.np_random(seed)
-        self.seed(seed=seed)
+        # super().reset()
+        self.np_random, seed = seeding.np_random(seed)
         self._reset_sim()
         obs = self._get_obs()
         return obs
@@ -148,7 +141,7 @@ class FetchNoTaskEnv(gym.Env, gym.utils.EzPickle):
         self.sim.forward()
 
     def close(self) -> None:
-        self.renderer.close()
+        pass
 
     def render(self, mode: str = "human") -> Optional[np.ndarray]:
         return self.renderer.render(mode)
@@ -181,5 +174,7 @@ class FetchNoTaskEnv(gym.Env, gym.utils.EzPickle):
             object_velp = self.sim.data.get_site_xvelp("object0") * self.dt
             object_velr = self.sim.data.get_site_xvelr("object0") * self.dt
 
-            obs = np.concatenate([gripper_pos, gripper_width, gripper_vel, object_pos, object_rot, object_velp, object_velr], dtype=np.float32)
+            obs = np.concatenate(
+                [gripper_pos, gripper_width, gripper_vel, object_pos, object_rot, object_velp, object_velr], dtype=np.float32
+            )
         return obs.copy()
