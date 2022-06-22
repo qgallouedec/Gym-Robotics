@@ -132,7 +132,8 @@ class FetchNoTaskEnv(gym.Env, gym.utils.EzPickle):
         return obs, reward, done, info
 
     def reset(self, seed: Optional[int] = None):
-        super().reset(seed=seed)
+        self.np_random, seed = gym.utils.seeding.np_random(seed)
+        self.seed(seed=seed)
         self._reset_sim()
         obs = self._get_obs()
         return obs
